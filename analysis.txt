@@ -1,0 +1,169 @@
+Visualisation Meta
+
+
+
+
+UPLOAD:
+.csv,.xlsx,.xls,.json
+
+pl.read_csv("file.csv")
+pl.read_xls("file.csv")
+df_pandas = pd.read_excel("file.xlsx", engine="openpyxl") 
+df_polars = pl.from_pandas(df_pandas)
+
+-Create Project:
+Store data as a dict??
+project_id = str(uuid.uuid4())
+        project_name = request.form.get('project_name', 'Untitled Project')
+        project_description = request.form.get('project_description', '')
+       
+        projects[project_id] = {
+            'id': project_id,
+            'name': project_name,
+            'description': project_description,
+            'data': data,
+            'column_types': df.dtypes.astype(str).to_dict(),
+            'stats': df.describe().to_dict(),
+            'last_updated': pd.Timestamp.now().strftime("%Y-%m-%d %H:%M:%S")
+        }
+       
+        return jsonify({
+            'project_id': project_id,
+            'data': data,
+            'column_types': df.dtypes.astype(str).to_dict(),
+            'stats': df.describe().to_dict()
+        })
+
+PROJECT
+   project = projects.get(project_id)
+    if project:
+        return jsonify(project)
+    return jsonify({'error': 'Project not found'}), 404
+
+
+
+
+ANALYSE PROJECT:
+Convert back to dataframe
+df = pl.DataFrame(data)
+Choose numeric and correlation:
+# Define numeric types available in Polars
+numeric_types = (pl.Int8, pl.Int16, pl.Int32, pl.Int64,
+                 pl.UInt8, pl.UInt16, pl.UInt32, pl.UInt64,
+                 pl.Float32, pl.Float64)
+
+# Filter numeric columns using the DataFrame's schema
+numeric_columns = [name for name, dtype in df.schema.items() if dtype in numeric_types]
+numeric_df = df.select(numeric_columns)
+
+# Compute correlation using Polars
+correlation = numeric_df.corr().to_dict()
+
+# Determine the number of PCA components based on the shape of the DataFrame
+n_components = min(2, numeric_df.shape[1], numeric_df.shape[0])
+
+# Convert the Polars DataFrame to a NumPy array for scikit-learn processing
+data = numeric_df.to_numpy()
+
+# If there are not enough components, create a dummy second component
+if n_components < 2:
+    # Create a dummy 2D result: x is the only column and y is zeros
+    pca_result = {
+        'x': data[:, 0].tolist() if data.size else [],
+        'y': [0] * len(data) if data.size else []
+    }
+    scaled_data = data  # No scaling is needed if we don't do PCA
+else:
+    # Scale data
+    scaler = StandardScaler()
+    scaled_data = scaler.fit_transform(data)
+
+    # Perform PCA
+    pca = PCA(n_components=n_components)
+    pca_result_array = pca.fit_transform(scaled_data)
+    
+    if n_components == 1:
+        pca_result = {
+            'x': pca_result_array[:, 0].tolist(),
+            'y': [0] * pca_result_array.shape[0]
+        }
+    else:
+        pca_result = {
+            'x': pca_result_array[:, 0].tolist(),
+            'y': pca_result_array[:, 1].tolist()
+        }
+
+# Perform K-means clustering only if we have enough data points
+if len(data) >= 3:
+    n_clusters = min(3, len(data))
+    kmeans = KMeans(n_clusters=n_clusters, random_state=42)
+    kmeans_result = kmeans.fit_predict(scaled_data).tolist()
+else:
+    kmeans_result = [0] * len(data)
+
+analysis = {
+    'correlation': correlation,
+    'pca': pca_result,
+    'kmeans': kmeans_result
+}
+
+print(analysis)
+
+EXPORT:
+Write as specific files.
+import io
+from flask import request, jsonify
+import polars as pl
+import pandas as pd  # used only for Excel export
+
+project_id = request.json.get('project_id')
+export_format = request.json.get('format', 'csv')
+
+if project_id not in projects:
+    return jsonify({'error': 'Project not found'}), 404
+
+project = projects[project_id]
+
+# Create a Polars DataFrame from project data (assumes project['data'] is a list of dicts)
+df = pl.DataFrame(project['data'])
+
+if export_format == 'csv':
+    # Polars can export CSV to string
+    data = df.write_csv(string=True)
+    filename = f"{project['name']}.csv"
+elif export_format == 'json':
+    # Polars can export to JSON using the to_json method
+    data = df.to_json()
+    filename = f"{project['name']}.json"
+elif export_format == 'excel':
+    # Polars does not support Excel export natively,
+    # so convert to Pandas DataFrame and use Pandas' to_excel method.
+    df_pandas = df.to_pandas()
+    output = io.BytesIO()
+    df_pandas.to_excel(output, index=False)
+    data = output.getvalue()
+    filename = f"{project['name']}.xlsx"
+else:
+    return jsonify({'error': 'Unsupported export format'}), 400
+
+return jsonify({'data': data, 'filename': filename})
+
+LOGOUT:
+Clear session and move to main page
+GENERATE STORY:
+–show most correlated variable - only 1
+–show skews - outliers
+GENERATE INSIGHTS:
+–statistical
+—only skew-already showed-redundant
+–Trends
+—monotonic increase or decrease
+Business
+—show correlation-redundant
+–quality
+—missing and duplicate values
+SUGGEST VISUALISATION:
+–only scatter between two correlated files
+
+
+
