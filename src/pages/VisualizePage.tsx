@@ -1,3 +1,5 @@
+
+
 import React, { useState, useEffect } from 'react';
 import {
   BarChart2,
@@ -54,12 +56,16 @@ const VisualizePage = () => {
   const [selectedColumns, setSelectedColumns] = useState<string[]>([]);
   const [availableColumns, setAvailableColumns] = useState<string[]>([]);
 
+  // Fetch visualization data from the backend
   const fetchData = async () => {
     setLoading(true);
     try {
-      const response = await axios.get('http://localhost:5000/visualize', {
-        params: { columns: selectedColumns, type: chartType },
+      // Log to check selectedColumns
+      console.log("Fetching visualization with selectedColumns:", selectedColumns);
+      const response = await axios.get('http://localhost:8080/visualize', {
+        params: { columns: selectedColumns.join(","), type: chartType },
       });
+      
       setData(response.data);
     } catch (error) {
       console.error('Visualization error:', error);
@@ -69,11 +75,18 @@ const VisualizePage = () => {
     }
   };
 
+  // Fetch available columns from backend on mount
   useEffect(() => {
     const fetchColumns = async () => {
       try {
-        const response = await axios.get('http://localhost:5000/columns');
-        setAvailableColumns(response.data);
+        const response = await axios.get('http://localhost:8080/columns');
+        // Ensure the response is an array:
+        if (Array.isArray(response.data)) {
+          setAvailableColumns(response.data);
+        } else {
+          console.error('Expected an array of columns, got:', response.data);
+          toast.error('Failed to fetch available columns');
+        }
       } catch (error) {
         console.error('Error fetching columns:', error);
         toast.error('Failed to fetch available columns');
@@ -152,6 +165,7 @@ const VisualizePage = () => {
                       : 'text-gray-600 hover:bg-gray-50'
                   }`}
                 >
+
                   <Icon size={20} />
                   <span className="font-medium">{label}</span>
                 </button>
@@ -188,6 +202,11 @@ const VisualizePage = () => {
           </div>
 
           {/* Update Button */}
+          <button
+            onClick={renderChart}
+            
+            className="w-full flex items-center justify-center space-x-2 px-6 py-3 bg-purple-600 text-white rounded-lg hover:bg-purple-700 focus:outline-none focus:ring-2 focus:ring-purple-500 focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed"
+          ></button>
           <button
             onClick={fetchData}
             disabled={loading || selectedColumns.length === 0}
