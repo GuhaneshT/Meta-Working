@@ -22,7 +22,7 @@ const PreprocessPage = () => {
     setLoading(true);
 
     try {
-      const response = await axios.post('http://localhost:5000/preprocess', options);
+      const response = await axios.post('http://localhost:8080/preprocess', options);
       toast.success('Data preprocessed successfully!');
       // Handle the preprocessed data
     } catch (error) {
